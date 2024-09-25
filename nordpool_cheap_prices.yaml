@@ -132,7 +132,8 @@ action:
               {%- else -%}
                 {{ false }}
               {%- endif -%}
-        sequence: !input cheap
+        sequence:
+          - service: !input cheap
       - conditions:
           - condition: template
             value_template: >-
@@ -149,5 +150,6 @@ action:
               {%- else -%}
                 {{ false }}
               {%- endif -%}
-        sequence: !input expensive
+        sequence:
+          - service: !input expensive
     default: []
