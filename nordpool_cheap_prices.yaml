@@ -1,13 +1,15 @@
 blueprint:
-  name: Nordpool cheap hours with restricted time window
-  description:
-    This blueprint uses the nordpool integration and lets you choose how many hours
-    you define as cheap, restricting it to a specific time window.
+  name: Nordpool cheap hours (Aangepast)
+  description: >
+    Deze blueprint gebruikt de nordpool integratie en laat je kiezen hoeveel uren
+    je als goedkoop wilt definiëren, en maakt automatiseringen op basis van die informatie.
+    Je kunt nu ook een tijdsbestek opgeven waarbinnen naar goedkope uren wordt gezocht.
   domain: automation
+  source_url: https://github.com/kullarkert/ha_nordpool_hours_blueprint/blob/main/nordpool_cheap_prices.yaml
   input:
     grid_area:
       name: Grid area sensor
-      description: This is your grid area sensor
+      description: Dit is je grid area sensor
       selector:
         entity:
           domain:
@@ -15,8 +17,8 @@ blueprint:
           integration: nordpool
           multiple: false
     cheap_hours:
-      name: Cheap hours
-      description: Number of cheap hours
+      name: Goedkope uren
+      description: Aantal goedkope uren
       default: 5
       selector:
         number:
@@ -26,68 +28,68 @@ blueprint:
           step: 1.0
           unit_of_measurement: "h"
     start_time:
-      name: Start time
-      description: "The first time when the action should be allowed to start."
-      default: "06:00:00"
+      name: Starttijd
+      description: "Tijd waarop de zoekperiode voor goedkope uren begint"
+      default: "00:00:00"
       selector:
         time: {}
     end_time:
-      name: End time
-      description: "The last time when the action should be allowed to run."
-      default: "22:00:00"
+      name: Eindtijd
+      description: "Tijd waarop de zoekperiode voor goedkope uren eindigt"
+      default: "23:59:59"
       selector:
         time: {}
     day_monday:
-      name: Run on Monday
-      description: Run the action on Monday.
+      name: Uitvoeren op maandag
+      description: Voer de actie uit op maandag
       default: true
       selector:
         boolean:
     day_tuesday:
-      name: Run on Tuesday
-      description: Run the action on Tuesday.
+      name: Uitvoeren op dinsdag
+      description: Voer de actie uit op dinsdag
       default: true
       selector:
         boolean:
     day_wednesday:
-      name: Run on Wednesday
-      description: Run the action on Wednesday.
+      name: Uitvoeren op woensdag
+      description: Voer de actie uit op woensdag
       default: true
       selector:
         boolean:
     day_thursday:
-      name: Run on Thursday
-      description: Run the action on Thursday.
+      name: Uitvoeren op donderdag
+      description: Voer de actie uit op donderdag
       default: true
       selector:
         boolean:
     day_friday:
-      name: Run on Friday
-      description: Run the action on Friday.
+      name: Uitvoeren op vrijdag
+      description: Voer de actie uit op vrijdag
       default: true
       selector:
         boolean:
     day_saturday:
-      name: Run on Saturday
-      description: Run the action on Saturday.
+      name: Uitvoeren op zaterdag
+      description: Voer de actie uit op zaterdag
       default: true
       selector:
         boolean:
     day_sunday:
-      name: Run on Sunday
-      description: Run the action on Sunday.
+      name: Uitvoeren op zondag
+      description: Voer de actie uit op zondag
       default: true
       selector:
         boolean:
     expensive:
-      name: Expensive
-      description: Action to run on expensive hours
+      name: Duur
+      description: Actie uit te voeren tijdens dure uren
       default: []
       selector:
         action: {}
     cheap:
-      name: Cheap
-      description: Action to run on cheap hours
+      name: Goedkoop
+      description: Actie uit te voeren tijdens goedkope uren
       default: []
       selector:
         action: {}
@@ -103,14 +105,6 @@ variables:
   day_friday: !input day_friday
   day_saturday: !input day_saturday
   day_sunday: !input day_sunday
-  prices_today: >-
-    {% set start_time = strptime(start_time, '%H:%M:%S').time() %}
-    {% set end_time = strptime(end_time, '%H:%M:%S').time() %}
-    {% set now_time = now().time() %}
-    {% set today_prices = state_attr(grid_area_var, 'today') %}
-    {# Filter prijzen binnen het ingestelde tijdsvenster #}
-    {% set filtered_prices = today_prices | selectattr('time', '>=', start_time) | selectattr('time', '<=', end_time) | list %}
-    {{ filtered_prices }}
 trigger:
   - platform: state
     entity_id: !input grid_area
@@ -118,38 +112,34 @@ action:
   - choose:
       - conditions:
           - condition: template
-            value_template: >-
+            value_template: >
               {%- set today = now().weekday() -%}
-              {%- set now_time = now().time() -%}
-              {%- set start_time = strptime(start_time, '%H:%M:%S').time() -%}
-              {%- set end_time = strptime(end_time, '%H:%M:%S').time() -%}
-              {%- if (today == 0 and day_monday) or (today == 1 and day_tuesday) or (today == 2 and day_wednesday) or ( today == 3 and day_thursday) or (today == 4 and day_friday) or (today == 5 and day_saturday) or (today == 6 and day_sunday) -%}
-                {%- if start_time <= now_time <= end_time -%}
-                  {{ state_attr(grid_area_var, 'current_price')|float < (prices_today|sort)[cheap_hours_var|int] }}
+              {%- set current_time = now().strftime("%H:%M:%S") -%}
+              {%- if (today == 0 and day_monday) or (today == 1 and day_tuesday) or (today == 2 and day_wednesday) or (today == 3 and day_thursday) or (today == 4 and day_friday) or (today == 5 and day_saturday) or (today == 6 and day_sunday) -%}
+                {%- if start_time <= current_time <= end_time -%}
+                  {%- set filtered_prices = state_attr(grid_area_var, 'today') | selectattr('hour', 'ge', start_time.split(':')[0] | int) | selectattr('hour', 'le', end_time.split(':')[0] | int) | list -%}
+                  {{ state_attr(grid_area_var, 'current_price') | float < (filtered_prices | sort(attribute='value'))[ cheap_hours_var | int ].value }}
                 {%- else -%}
                   {{ false }}
                 {%- endif -%}
               {%- else -%}
                 {{ false }}
               {%- endif -%}
-        sequence:
-          - service: !input cheap
+        sequence: !input cheap
       - conditions:
           - condition: template
-            value_template: >-
+            value_template: >
               {%- set today = now().weekday() -%}
-              {%- set now_time = now().time() -%}
-              {%- set start_time = strptime(start_time, '%H:%M:%S').time() -%}
-              {%- set end_time = strptime(end_time, '%H:%M:%S').time() -%}
-              {%- if (today == 0 and day_monday) or (today == 1 and day_tuesday) or (today == 2 and day_wednesday) or ( today == 3 and day_thursday) or (today == 4 and day_friday) or (today == 5 and day_saturday) or (today == 6 and day_sunday) -%}
-                {%- if start_time <= now_time <= end_time -%}
-                  {{ state_attr(grid_area_var, 'current_price')|float > (prices_today|sort)[cheap_hours_var|int] }}
+              {%- set current_time = now().strftime("%H:%M:%S") -%}
+              {%- if (today == 0 and day_monday) or (today == 1 and day_tuesday) or (today == 2 and day_wednesday) or (today == 3 and day_thursday) or (today == 4 and day_friday) or (today == 5 and day_saturday) or (today == 6 and day_sunday) -%}
+                {%- if start_time <= current_time <= end_time -%}
+                  {%- set filtered_prices = state_attr(grid_area_var, 'today') | selectattr('hour', 'ge', start_time.split(':')[0] | int) | selectattr('hour', 'le', end_time.split(':')[0] | int) | list -%}
+                  {{ state_attr(grid_area_var, 'current_price') | float > (filtered_prices | sort(attribute='value'))[ cheap_hours_var | int ].value }}
                 {%- else -%}
                   {{ false }}
                 {%- endif -%}
               {%- else -%}
                 {{ false }}
               {%- endif -%}
-        sequence:
-          - service: !input expensive
+        sequence: !input expensive
     default: []
